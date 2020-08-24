@@ -61,8 +61,6 @@ def create_label():
     Data.to_excel('review_english.xlsx', index=False)
 
 if __name__ == "__main__":
-
-
     # 감성분석 순서
     # 1. 데이터 읽어오기(이미 전처리,가공 된 데이터 이어야함)
     # 2. afinn 사전 혹은 emolex 사전을 이용해 감성점수 를 계산함
@@ -73,7 +71,6 @@ if __name__ == "__main__":
     Data = pd.read_excel("C:/Users/user/Desktop/MinHo/Python/College/review_english.xlsx", sheet_name= "Sheet1")
     afinn = Afinn()
 #    emolex(Data['review'][3307])
-
 
     # 감성분석을 하기전 지도학습을 하기위한 라벨링을 추가해줘야함
     #create_label()
@@ -92,7 +89,7 @@ if __name__ == "__main__":
     vect = TfidfVectorizer(stop_words=stop_words).fit(x_train)
     x_train_vectorized = vect.transform(x_train)
 
-  #  print(x_train_vectorized)
+    #print(x_train_vectorized)
 
     # 로지스틱 회귀로 학습한 결과
     model = LogisticRegression()
@@ -115,6 +112,3 @@ if __name__ == "__main__":
     print(clf.score(x_train_vectorized, y_train))
     print(clf.score(vect.transform(x_test), y_test))
     """
-
-
-

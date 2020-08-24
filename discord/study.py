@@ -33,14 +33,12 @@ main_url = "https://kr.api.riotgames.com"
 game = discord.Game("!help")  # 상태 메시지
 # commands_prefix는 해당 구문이 맨앞에 있을떄 명령어로 인식한다는 뜻 (!도움,!안녕 등) status 는 봇의값의 상태(온라인,자리비움 등) activity는 상태말 임
 bot = commands.Bot(command_prefix='!', status=discord.Status.online, activity=game, help_command=None)
-bad_word = ["씨발", "노무현","병신","개새끼" , "씨벌", "시발"]
+bad_word = ["씨발","병신","개새끼" , "씨벌", "시발"]
 
 # 노래 재생을 위한 변수들
 que = {}    # 재생목록 대기열
-pick_state = 0  # 유투브 검색을 하게 되면 Pick 상태가 됨  0 : !play를 아직안함 1 : 검색어로 유투브검색해서 목록을 띄운상태
 showlist = []   # 노래 제목과 시간을 표시할 list
 urllist = []    # url을 저장할 list
-
 
 def search_youtube(msg):
     search = YoutubeSearch(msg , max_results=5).to_dict()   # youtube 검색 api
@@ -52,15 +50,6 @@ def search_youtube(msg):
         showlist.append(text)
         url = "https://www.youtube.com/" + search[i]['url_suffix']
         urllist.append(url)
-def check_play_state():
-    if pick_state == 0:
-        return False
-    elif pick_state == 1:
-        return True
-    return False
-def change_play_state(state):
-    pick_state = state
-
 
 def get_SummonerId(summonerName):
     url = f"https://kr.api.riotgames.com/lol/summoner/v4/summoners/by-name/{summonerName}"
@@ -147,7 +136,6 @@ async def unban(ctx,*,member):
             await ctx.send(f"Unbanned {user.mention}")
             return
 """
-
 @bot.command()
 async def help(ctx):
     # embed를 이용해 썸네일,이미지,영상도 추가 가능!
@@ -197,9 +185,7 @@ async def play(ctx,*,content):
         text = msg[0]
         url = text
         url1 = re.match('(https?://)?(www\.)?((youtube\.(com))/watch\?v=([-\w]+)|youtu\.be/([-\w]+))', text)  # 정규 표현식을 사용해 url 검사
-        if text in ['1', '2', '3', '4', '5'] and len(showlist) > 0:
-            print("ㅎㅇ")
-
+        
         if text in ['1', '2', '3', '4', '5']:   # 입력값이 숫자고 선택목록이 있을경우만 선택할수있음
             if len(showlist) > 0 :
               url = urllist[int(text) - 1]
@@ -264,7 +250,6 @@ async def play(ctx,*,content):
 
     print(player)
     voice_client.play(FFmpegPCMAudio(player['formats'][0]['url'], **FFMPEG_OPTIONS),after=lambda e : queue(server.id,voice_client,FFMPEG_OPTIONS))   # 노래 재생
-
 
 @bot.command()
 async def quit(ctx):
