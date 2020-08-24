@@ -38,7 +38,8 @@ bad_word = ["씨발","병신","개새끼" , "씨벌", "시발"]
 # 노래 재생을 위한 변수들
 que = {}    # 재생목록 대기열
 showlist = []   # 노래 제목과 시간을 표시할 list
-urllist = []    # url을 저장할 list
+urllist = []    # url을 저장할 listz
+message_id = [] # bot이 메세지의 id 정보를 가지고있음
 
 def search_youtube(msg):
     search = YoutubeSearch(msg , max_results=5).to_dict()   # youtube 검색 api
@@ -153,8 +154,13 @@ async def welcome(ctx):
     embed.add_field(name = f"재석이는?", value=f"전라도홍어라서 남 통수를 잘쳐요!", inline= False)
     await ctx.send(embed=embed)
 @bot.command()
-async def lol(ctx,content):
-    name = content.split(" ")[0]
+async def lol(ctx,*,content):
+    temp = content.split(" ")
+    name = ""
+    for t in temp:
+        name += t
+    print(name)
+
     print(name)
     info = get_SummonerId(name)
     rank_info = get_RankInfo(info['id'])
@@ -178,11 +184,18 @@ async def play(ctx,*,content):
         'outtmpl': 'song.%(ext)s',
     }
     FFMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn'}
-    msg = content.split(" ")
+    temp = content.split(" ")
+    text = ""
+    for t in temp:
+        text += t
+    print(text)
+
+    # message를 쓴적이 있다면 id 값으로 message 객체 생성
+    if len(message_id) > 0:
+        message = await ctx.fetch_message(message_id[0])
 
     # url 값이 정상적인 값인지 확인
     try:
-        text = msg[0]
         url = text
         url1 = re.match('(https?://)?(www\.)?((youtube\.(com))/watch\?v=([-\w]+)|youtu\.be/([-\w]+))', text)  # 정규 표현식을 사용해 url 검사
         
@@ -200,10 +213,15 @@ async def play(ctx,*,content):
             showlist.clear()
             urllist.clear()
             search_youtube(text)
-            embed = discord.Embed(title=f"트랙을 선택해주세요. !play 1-5", color=discord.Color.blue())
+            if len(message_id) > 0: # 이전에 showlist를 메세지를 띄운경우 그 메세지를 삭제
+                await message.delete()
+                message_id.clear()
+            message = await ctx.send("로딩중")
+            message_id.append(message.id)   # 메세지 id정보 저장
+            playlist = "**트랙을 선택해주세요.** ``!play 1-5``\n"
             for i in range(5):
-                embed.add_field(name=f"{i+1}.",value=f"{showlist[i]}" , inline=False)
-            await ctx.send(embed=embed)
+                playlist += "**" + str(i+1) + "**:" + showlist[i] + "\n"
+            await message.edit(content = playlist)
             return
     except IndexError:
         await ctx.send(embed=discord.Embed(title=":no_entry_sign: url을 입력해주세요.", colour=0x2EFEF7))
@@ -235,14 +253,16 @@ async def play(ctx,*,content):
             que[server.id].append(player)   # 노래 추가
         else:  # 큐에 값이 없을 때 (재생목록에 노래가 없을때)
             que[server.id] = [player]   # 대기열에 노래를 리스트 형태로 추가함
-        await ctx.send(embed=discord.Embed(title=":white_check_mark: {} 추가 완료!".format(player['title']), colour=0x2EFEF7))
+        await message.edit(content = f"{player['title']}추가 완료!")
+        message_id.clear()
         return
 
     # 최초로 노래 재생을 할때
     try:
         with YoutubeDL(YDL_OPTIONS) as ydl:
             player = ydl.extract_info(url,download=False)
-        await ctx.send(embed=discord.Embed(title=":white_check_mark: {} 재생".format(player['title']), colour=0x2EFEF7))
+        await message.edit(content = f"{player['title']} 재생")
+        message_id.clear()
     except youtube_dl.utils.DownloadError:  # 유저가 제대로 된 유튜브 경로를 입력하지 않았을 때
         await ctx.send(embed=discord.Embed(title=":no_entry_sign: 존재하지 않는 경로입니다.", colour=0x2EFEF7))
         await voice_client.disconnect()
@@ -261,6 +281,7 @@ async def quit(ctx):
         await ctx.send(embed=discord.Embed(title=":no_entry_sign: 봇이 음성채널에 없어요.", colour=0x2EFEF7))
         return
     que = {}    # 퇴장하면서 입장했을떄 설정한 정보 초기화
+    message_id.clear()
     await ctx.send(embed=discord.Embed(title=":mute: 채널에서 나갑니다.", colour=0x2EFEF7))  # 봇이 음성채널에 접속해있을 때
     await voice_client.disconnect()
 
