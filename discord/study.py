@@ -8,6 +8,7 @@ import re
 from youtube_dl import YoutubeDL
 import youtube_dl
 import requests
+import random
 
 # 디스코드 1.0 이상에서는 bot을 이용한 방식이 보편적이고 유용하다.(문법적으로도 좀 바뀜)
 
@@ -40,6 +41,10 @@ que = {}    # 재생목록 대기열
 showlist = []   # 노래 제목과 시간을 표시할 list
 urllist = []    # url을 저장할 listz
 message_id = [] # bot이 메세지의 id 정보를 가지고있음
+volume = 0.4
+
+# 추천 변수들
+users_list = []
 
 def search_youtube(msg):
     search = YoutubeSearch(msg , max_results=5).to_dict()   # youtube 검색 api
@@ -83,6 +88,8 @@ def queue(id,voice_client,options):  #음악 재생용 큐
             print("봇 대기열 재생목록 재생중")
             player = que[id].pop(0)
             voice_client.play(FFmpegPCMAudio(player['formats'][0]['url'], **options),after=lambda e : queue(id,voice_client,options))   # 노래 재생
+            voice_client.source = discord.PCMVolumeTransformer(voice_client.source)
+            voice_client.source.volume = volume
         else:
             print("다음 재생 목록 없음")
     except Exception as e : # 에러 발생시
@@ -93,6 +100,7 @@ def queue(id,voice_client,options):  #음악 재생용 큐
 async def on_ready():
     print(f"{bot.user}에 로그인하였습니다!")
 
+"""
 @bot.event
 async def on_message(message):      # 메세지가 채널에 올라왔을떄
     message_content = message.content
@@ -104,6 +112,7 @@ async def on_message(message):      # 메세지가 채널에 올라왔을떄
             await message.channel.send(f"욕하지마세요 {message.author} 걸레년아")   # 욕이 올라온 채널에 해당 메세지를 전송
             await message.delete()  # 욕설이 담긴 메세지 삭제   단 봇이 메시지 관리를 할수 있는 권한을 줘야함
     await bot.process_commands(message) # 메세지중 명령어가 있을 경우 처리해주는 코드
+"""
 
 @bot.event
 async def on_member_join(member):
@@ -141,8 +150,9 @@ async def unban(ctx,*,member):
 async def help(ctx):
     # embed를 이용해 썸네일,이미지,영상도 추가 가능!
     embed = discord.Embed(title=f"{ctx.author}님 무엇을 도와드릴까요?", description="봇 소개", color=discord.Color.blue())
-    embed.add_field(name=f"명령어", value=f"!help !welcome(임시) !play 검색어 !quit", inline=False)
-    embed.add_field(name=f"욕설필터링", value=f"각종 욕설 및 노무현 고인드립 등 필터링을 합니다.(임시)", inline=False)
+    embed.add_field(name=f"명령어", value=f"!help", inline=False)
+    embed.add_field(name=f"Music", value=f"!play (검색어) !skip !quit", inline=False)
+    embed.add_field(name=f"기타기능", value=f"!참가 !추첨 (추첨개수)", inline=False)
     await ctx.send(embed=embed)
     #await ctx.send(f"{ctx.author.mention}님 무엇을 도와드릴까요?")
 
@@ -172,6 +182,55 @@ async def lol(ctx,*,content):
     await ctx.send(embed=embed)
 
 @bot.command()
+async def 참가(ctx):
+    user = ctx.message.author
+
+    if user in users_list:
+        msg = str(user) + " 님은 이미 참가하였습니다."
+    else:
+        msg = str(user) + " 님이 참가했습니다."
+        users_list.append(ctx.message.author)
+
+    # message를 쓴적이 있다면 id 값으로 message 객체 생성
+    if len(message_id) > 0:
+        message = await ctx.fetch_message(message_id[0])
+        await message.delete()
+        message_id.clear()
+    message = await ctx.send(msg)
+    message_id.append(message.id)
+
+@bot.command()
+async def 참가목록(ctx):
+    msg = ""
+    i = 1
+    for user in users_list:
+        msg += f"{i}. {user}\n"
+        i += 1
+    await ctx.send(msg)
+
+@bot.command()
+async def 추첨(ctx,content):
+    if users_list != []:
+        pick = content.split(" ")[0]
+        if int(pick) > len(users_list):
+            await ctx.send("추첨할 개수가 참가한 사람들보다 많습니다.")
+            return
+        msg = ""
+        users = random.choices(users_list,k=int(pick))
+        for user in users:
+            msg += f"{user}\n"
+        msg += "당첨되셨습니다."
+        users_list.clear()
+        await ctx.send(msg)
+    else:
+        await ctx.send("참가한 사람들이 없습니다!")
+
+@bot.command()
+async def dice(ctx):
+    msg = "-- " + str(random.randrange(1,100)) + " --"
+    await ctx.send(msg)
+
+@bot.command()
 async def play(ctx,*,content):
     # 영상을 오디오 최적화 하는 옵션
     YDL_OPTIONS = {
@@ -198,31 +257,34 @@ async def play(ctx,*,content):
     try:
         url = text
         url1 = re.match('(https?://)?(www\.)?((youtube\.(com))/watch\?v=([-\w]+)|youtu\.be/([-\w]+))', text)  # 정규 표현식을 사용해 url 검사
-        
-        if text in ['1', '2', '3', '4', '5']:   # 입력값이 숫자고 선택목록이 있을경우만 선택할수있음
-            if len(showlist) > 0 :
-              url = urllist[int(text) - 1]
-              showlist.clear()
-              urllist.clear()
+
+        if url1 == None:
+            if text in ['1', '2', '3', '4', '5']:  # 입력값이 숫자고 선택목록이 있을경우만 선택할수있음
+                if len(showlist) > 0:
+                    url = urllist[int(text) - 1]
+                    showlist.clear()
+                    urllist.clear()
+                else:
+                    print("노래를 검색하지 않았습니다.")
+                    return
+                # 재생목록 보여준거 수정하면서 재생됬다고 수정해야함
             else:
-                print("노래를 검색하지 않았습니다.")
+                # 노래 목록을 선택하려고 할때마다 이전목록을 초기화시킴
+                showlist.clear()
+                urllist.clear()
+                search_youtube(text)
+                if len(message_id) > 0: # 이전에 showlist를 메세지를 띄운경우 그 메세지를 삭제
+                    await message.delete()
+                    message_id.clear()
+                message = await ctx.send("로딩중")
+                message_id.append(message.id)   # 메세지 id정보 저장
+                playlist = "**트랙을 선택해주세요.** ``!play 1-5``\n"
+                for i in range(5):
+                    playlist += "**" + str(i+1) + "**:" + showlist[i] + "\n"
+                await message.edit(content = playlist)
                 return
-            # 재생목록 보여준거 수정하면서 재생됬다고 수정해야함
-        elif url1 == None:
-            # 노래 목록을 선택하려고 할때마다 이전목록을 초기화시킴
-            showlist.clear()
-            urllist.clear()
-            search_youtube(text)
-            if len(message_id) > 0: # 이전에 showlist를 메세지를 띄운경우 그 메세지를 삭제
-                await message.delete()
-                message_id.clear()
+        else:
             message = await ctx.send("로딩중")
-            message_id.append(message.id)   # 메세지 id정보 저장
-            playlist = "**트랙을 선택해주세요.** ``!play 1-5``\n"
-            for i in range(5):
-                playlist += "**" + str(i+1) + "**:" + showlist[i] + "\n"
-            await message.edit(content = playlist)
-            return
     except IndexError:
         await ctx.send(embed=discord.Embed(title=":no_entry_sign: url을 입력해주세요.", colour=0x2EFEF7))
         return
@@ -253,7 +315,7 @@ async def play(ctx,*,content):
             que[server.id].append(player)   # 노래 추가
         else:  # 큐에 값이 없을 때 (재생목록에 노래가 없을때)
             que[server.id] = [player]   # 대기열에 노래를 리스트 형태로 추가함
-        await message.edit(content = f"{player['title']}추가 완료!")
+        await message.edit(content = f"{player['title']} 추가 완료!")
         message_id.clear()
         return
 
@@ -270,7 +332,20 @@ async def play(ctx,*,content):
 
     print(player)
     voice_client.play(FFmpegPCMAudio(player['formats'][0]['url'], **FFMPEG_OPTIONS),after=lambda e : queue(server.id,voice_client,FFMPEG_OPTIONS))   # 노래 재생
+    # 볼륨설정 voice_client.source는 play이후에 생성되기때문에 play이후에 설정해줌
+    voice_client.source = discord.PCMVolumeTransformer(voice_client.source)
+    voice_client.source.volume = volume
 
+# 스킵
+@bot.command()
+async def skip(ctx):
+    channel = ctx.message.author.voice.channel
+    server = ctx.guild
+    voice_client = ctx.guild.voice_client
+    
+    if voice_client.is_playing():
+        voice_client.stop()
+# 봇 종료
 @bot.command()
 async def quit(ctx):
     channel = ctx.message.author.voice.channel
@@ -285,5 +360,9 @@ async def quit(ctx):
     await ctx.send(embed=discord.Embed(title=":mute: 채널에서 나갑니다.", colour=0x2EFEF7))  # 봇이 음성채널에 접속해있을 때
     await voice_client.disconnect()
 
+@추첨.error
+async def 추첨_error(ctx,error):
+    if isinstance(error,commands.MissingRequiredArgument):
+        await ctx.send("추첨 할 개수가 없습니다.")
 # run함수는 on_ready 랑 bot.command 이후에 실행이 되어야함
 bot.run(token)  # 해당 토큰을 가진 봇을 실행
