@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands    # 본격적인 봇 생성을  위한 모듈
 from discord import FFmpegPCMAudio
+from discord.ext.commands import has_permissions, MissingPermissions
 from youtube_search import YoutubeSearch
 import asyncio
 import os
@@ -9,6 +10,10 @@ from youtube_dl import YoutubeDL
 import youtube_dl
 import requests
 import random
+import urllib
+from urllib.request import Request, urlopen
+from urllib.parse import quote
+from bs4 import BeautifulSoup
 
 # 디스코드 1.0 이상에서는 bot을 이용한 방식이 보편적이고 유용하다.(문법적으로도 좀 바뀜)
 
@@ -117,19 +122,20 @@ async def on_message(message):      # 메세지가 채널에 올라왔을떄
 @bot.event
 async def on_member_join(member):
     # 유저가 서버에 처음 접속시 발생하는 이벤트
-    await member.send("어서오세요! {}님이 병신이 되신걸 환영합니다!".format(member))
+    channel = bot.get_channel(297698515415728128)
+    await channel.send("어서오세요! {}님이 민초단이 되신걸 환영합니다!".format(member))
     # member 매개변수로 처음 들어온 유저의 정보를 받아와 member.send로 해당 유저에게 메세지를 보냅니다.
 
 @bot.event
 async def on_member_remove(member):
-    await member.send("{}님이 서버에서 나가셨습니다.".format(member))
+    channel = bot.get_channel(297698515415728128)
+    await channel.send(f"{member}님이 민초단을 배신하였습니다.")
 
 """
 @bot.command()
 async def kick(ctx,member : discord.Member,*,reason = None):
-    await member.kick(reason = reason)
+    await member.kick(reason=reason)
     await ctx.send("{}님이 강퇴당하였습니다.".format(member))
-
 @bot.command()
 async def ban(ctx,member : discord.Member,*,reason = None):
     await member.ban(reason = reason)
@@ -148,21 +154,13 @@ async def unban(ctx,*,member):
 """
 @bot.command()
 async def help(ctx):
-    # embed를 이용해 썸네일,이미지,영상도 추가 가능!
-    embed = discord.Embed(title=f"{ctx.author}님 무엇을 도와드릴까요?", description="봇 소개", color=discord.Color.blue())
-    embed.add_field(name=f"명령어", value=f"!help", inline=False)
-    embed.add_field(name=f"Music", value=f"!play (검색어) !skip !quit", inline=False)
-    embed.add_field(name=f"기타기능", value=f"!참가 !추첨 (추첨개수)", inline=False)
-    await ctx.send(embed=embed)
-    #await ctx.send(f"{ctx.author.mention}님 무엇을 도와드릴까요?")
+    msg = "!help\n노래 : !play (검색어) !skip !quit\n!코로나\n!상영영화\n!날씨\n당첨 : !참가 !추첨 (추첨개수)\n확률 : !주사위\n도박 : !러시안룰렛\n!실검\n\n----보류 중----\n!lol"
 
-@bot.command()
-async def welcome(ctx):
     # embed를 이용해 썸네일,이미지,영상도 추가 가능!
-    embed = discord.Embed(title = f"우리서버에 오신 것을 환영합니다.", description="방장님을 위한 서버!",color=discord.Color.blue())
-    embed.add_field(name = f"우리서버는요?", value=f"질병걸린 사람들을 위한 치료센터에요!",inline=False)
-    embed.add_field(name = f"재석이는?", value=f"전라도홍어라서 남 통수를 잘쳐요!", inline= False)
+    embed = discord.Embed(title=f"{ctx.author}님 무엇을 도와드릴까요?", color=discord.Color.blue())
+    embed.add_field(name=f"----명령어----", value=msg, inline=False)
     await ctx.send(embed=embed)
+
 @bot.command()
 async def lol(ctx,*,content):
     temp = content.split(" ")
@@ -184,7 +182,6 @@ async def lol(ctx,*,content):
 @bot.command()
 async def 참가(ctx):
     user = ctx.message.author
-
     if user in users_list:
         msg = str(user) + " 님은 이미 참가하였습니다."
     else:
@@ -216,7 +213,7 @@ async def 추첨(ctx,content):
             await ctx.send("추첨할 개수가 참가한 사람들보다 많습니다.")
             return
         msg = ""
-        users = random.choices(users_list,k=int(pick))
+        users = random.sample(users_list,int(pick))
         for user in users:
             msg += f"{user}\n"
         msg += "당첨되셨습니다."
@@ -226,9 +223,179 @@ async def 추첨(ctx,content):
         await ctx.send("참가한 사람들이 없습니다!")
 
 @bot.command()
-async def dice(ctx):
+async def 주사위(ctx):
     msg = "-- " + str(random.randrange(1,100)) + " --"
     await ctx.send(msg)
+
+@bot.command()
+async def 실검(ctx):
+    # 방법 1
+    # 헤더는 유저정보를 담긴 user-agent 값을 넘겨서 유저인걸 인식시킨다. 그리고 각종 설정값이 담긴 cookie 값도 설정해줌
+    header = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.83 Safari/537.36',
+              'cookie' : 'NNB=JOG5SUQPOJSF4; ASID=74229d3b00000170c9505c160000005a; _ga_4BKHBFKFK0=GS1.1.1595757924.2.1.1595757924.60; nx_ssl=2; _ga=GA1.1.1866649330.1587454866; _ga_7VKFYR6RV1=GS1.1.1597243589.7.0.1597243589.60; nid_inf=-1485735036; NID_AUT=/lVwqT4qcuHVOSWEPWjo4BDksW8AXy8mrNhXRbV44Ysu0lhiSKEbTWW/FLrYlJTv; NID_JKL=3iDdkoMQdNOR/YSukSs3orqY6KbRlaysKaHkHRuj/yE=; BMR=; _datalab_cid=50000000; page_uid=U1t1hlprvN8ss7vDnBlssssssb0-291485; NRTK=ag#20s_gr#4_ma#2_si#2_en#2_sp#2; NID_SES=AAABnGxfgi0AVs0bAmkvQ6pZOv5rH8EO9dUcNLT1USM1hG2UYzYXCkS2PWZTtf/n9D82Y0igcRr4yf2248/s0/oF7supMd18PsCuRH3EaPJnSiLflYApfsOdZWbI89miVLmyy3GITgGA8vwYh/UPczJXYWB08inDwMiwQ+8M4StzS+qhvwp6CsbcoydkXsZzahJbnQSvSlhYJMcOHUKWNKwtK5g501p+sb/qjEQda9ktIuy1zAc8Ms8FtAVTWTJavFQoiIx6WnvcV2cbtDeAYdl//tEnFokI9TwTBZvD6suoi1jU98aBoFfVZD4zTX1x2g+tw4ZtgIzhfONHJLyb4EQPIGh487KYDc/sazmKEn8OxftqgW0HD5yx13WK3MG3G2ocyCkc/bDa6Rss1QqJYo/yc4aCBlmmpko5KnbZb/mjE0BQb2Q8/hZVRIwCOZLi8GF+nxFGstCQVlphmfVv586MdzoI/IZC1snj4fEOoNokTvhQmNpndYaOieHJiOSsgi1e1vwpOwWI7N+6rUBkFgEYJDLU2qRUaJmLAkhOMO2iswFj'}
+    site = "https://datalab.naver.com/keyword/realtimeList.naver?age=20s"
+    html = requests.get(site,headers=header)
+    bs = BeautifulSoup(html.content, 'html.parser')
+    real_time = bs.select('span.item_title')
+
+    msg = ""
+    i = 1
+    for item in real_time:
+        msg += "**" + str(i) + "**." + item.text + "\n"
+        i += 1
+
+    # 방법 2
+    # json 주소 구하는법은 브라우저 개발자도구에서 network 탭에서 필터링으로 원하는 부분 필터하고 나온 부분에 header에서 Request URL 값을 본다.
+    """
+    # 아래 주소가 메인페이지 내부에서 호출되는 실시간 검색어 데이터를 넘겨주는 주소
+    # requests.get("주소").json() 을 하면 데이터를 json 형태로 받아올 수 있습니다.
+    # 아래 주소를 직접 브라우저에서 접속해보시기 바랍니다.
+    json = requests.get('https://www.naver.com/srchrank?frm=main').json()
+    # json 데이터에서 "data" 항목의 값을 추출
+    ranks = json.get("data")
+    print(ranks)
+    """
+
+    # 메시지 보내기
+    embed = discord.Embed(title="실시간 검색어", description="", color=0x5CD1E5)
+    embed.add_field(name="조건 : 20대, 모든분야", value=msg, inline=False)
+    await ctx.send(embed=embed)
+
+@bot.command()
+async def 상영영화(ctx):
+    site = "https://movie.naver.com/movie/running/current.nhn?view=list&tab=normal&order=likeCount"
+    html = urlopen(site)  # html 얻기
+    bs = BeautifulSoup(html, 'html.parser')
+
+    title_list = bs.select('dt.tit > a')    # 제목
+    rate_list = bs.select('span.num')   # 평점
+    
+    # 문자열 처리
+    msg = ""
+    for num in range(20):
+        msg += "**" + str(num+1) + "**." + title_list[num].text + " " + rate_list[num].text + "\n"
+    # 메시지 보내기
+    embed = discord.Embed(title="상영영화", description="", color=0x5CD1E5)
+    embed.add_field(name="좋아요순", value=msg, inline=False)
+    await ctx.send(embed=embed)
+
+@bot.command()
+async def 코로나(ctx):
+    # 코로나 사이트
+    covid_site = "http://ncov.mohw.go.kr/index.jsp"
+    covid_notice = "http://ncov.mohw.go.kr"
+    html = urlopen(covid_site)  # html 얻기
+    bs = BeautifulSoup(html,'html.parser')
+    latest_update_time = bs.find('span',{'class' : "livedate"}).text.split(',')[0][1:].split('.')    # span class = livedata 인걸 찾아서 문자열을 분리함
+    statistical_numbers = bs.findAll('span', {'class': 'num'})  # 수치 통계들
+    beforeday_numbers = bs.findAll('span', {'class': 'before'}) # 지난 데이터
+
+    # 주요 브리핑 및 뉴스링크
+    brief_tasks = []
+    main_brief = bs.findAll('a',{'href' : re.compile('\/tcmBoardView\.do\?contSeq=[0-9]*')})
+    for brf in main_brief:
+        container = []
+        container.append(brf.text)
+        container.append(covid_notice + brf['href'])
+        brief_tasks.append(container)
+    print(brief_tasks)
+
+    # 통계수치
+    statNum = []
+    # 전일대비 수치
+    beforeNum = []
+    for num in range(7):
+        statNum.append(statistical_numbers[num].text)
+    for num in range(4):
+        beforeNum.append(beforeday_numbers[num].text.split('(')[-1].split(')')[0])
+
+    total_people_int = statNum[0].split(')')[-1].split(',')
+    tpInt = ''.join(total_people_int)
+    lethatRate = round((int(statNum[3]) / int(tpInt)) * 100, 2)
+    embed = discord.Embed(title="Covid-19 Virus Korea Status", description="", color=0x5CD1E5)
+    embed.add_field(name="Data source : Ministry of Health and Welfare of Korea",
+                    value="http://ncov.mohw.go.kr/index.jsp", inline=False)
+    embed.add_field(name="Latest data refred time",
+                    value="해당 자료는 " + latest_update_time[0] + "월 " + latest_update_time[1] + "일 " + latest_update_time[2] + " 자료입니다.", inline=False)
+    embed.add_field(name="확진환자(누적)", value=statNum[0].split(')')[-1] + "(" + beforeNum[0] + ")", inline=True)
+    embed.add_field(name="완치환자(격리해제)", value=statNum[1] + "(" + beforeNum[1] + ")", inline=True)
+    embed.add_field(name="치료중(격리 중)", value=statNum[2] + "(" + beforeNum[2] + ")", inline=True)
+    embed.add_field(name="사망", value=statNum[3] + "(" + beforeNum[3] + ")", inline=True)
+    embed.add_field(name="누적확진률", value=statNum[6], inline=True)
+    embed.add_field(name="치사율", value=str(lethatRate) + " %", inline=True)
+    embed.add_field(name="- 최신 브리핑 1 : " + brief_tasks[0][0], value="Link : " + brief_tasks[0][1], inline=False)
+    embed.add_field(name="- 최신 브리핑 2 : " + brief_tasks[1][0], value="Link : " + brief_tasks[1][1], inline=False)
+    embed.set_thumbnail(url="https://wikis.krsocsci.org/images/7/79/%EB%8C%80%ED%95%9C%EC%99%95%EA%B5%AD_%ED%83%9C%EA%B7%B9%EA%B8%B0.jpg")
+    embed.set_footer(text='Service provided by Hoplin.',
+                     icon_url='https://avatars2.githubusercontent.com/u/45956041?s=460&u=1caf3b112111cbd9849a2b95a88c3a8f3a15ecfa&v=4')
+    await ctx.send("Covid-19 Virus Korea Status", embed=embed)
+
+@bot.command()
+async def 날씨(ctx):
+    site = "https://search.naver.com/search.naver?sm=top_hty&fbm=0&ie=utf8&query=%EB%82%A0%EC%94%A8"
+    html = urlopen(site)  # html 얻기
+    bs = BeautifulSoup(html, 'html.parser')
+    # 하루 총 날씨정보
+    temperature_list = bs.findAll('span',{'class' : 'todaytemp'})
+    #print(temperature_list)
+    weather_list = bs.findAll('p',{'class' : 'cast_txt'})
+    #print(weather_list)
+    hour_rain = bs.find('span',{'class' : 'rainfall'})
+    #print(hour_rain.text)
+
+    #시간대별 날씨
+    hour_temperature_list = bs.select('ul > li > dl > dd.weather_item > span')  # 온도
+    hour_weather_list = bs.select('ul > li > dl > dd > span.ico_state2')    # 날씨
+    hour_time_list = bs.select('ul > li > dl > dd.item_time > span')    # 시간
+    #print(hour_temperature_list)
+    #print(hour_weather_list)
+    #print(hour_time_list)
+    
+    # 온도 텍스트만 추출
+    hour_temperature_show = []
+    for num in range(8):
+        hour_temperature_show.append(hour_temperature_list[num * 3].text)
+    #print(hour_temperature_show)
+
+    # 문자열 가공
+    hour_first = ""
+    hour_second = " "
+    hour_third = ""
+    for num in range(8):
+        if num==7:
+            hour_first += hour_temperature_show[num]
+            hour_second += hour_weather_list[num].text
+            hour_third += hour_time_list[num].text.replace(" ", "")
+        else:
+            hour_first += hour_temperature_show[num] + "   "
+            hour_second += hour_weather_list[num].text + "   "
+            hour_third += hour_time_list[num].text.replace(" ","") + " "
+
+    hour_info = "```css\n" + hour_third + "\n" + "[" + hour_first + "]\n" + hour_second + "```"
+    #print(hour_info)
+
+    # 메세지 레이아웃 설정 및 보내기
+    embed = discord.Embed(title="날씨", description="", color=0x5CD1E5)
+    embed.add_field(name="현재 날씨", value=temperature_list[0].text + "℃ \n" + weather_list[0].text + "\n" + hour_rain.text, inline=False)
+    embed.add_field(name="시간대별 날씨", value=hour_info,inline=False)
+    await ctx.send(embed=embed)
+
+@bot.command()
+async def 러시안룰렛(ctx):
+    if users_list != []:
+
+      if len(users_list) < 2:
+          await ctx.send("러시안 룰렛을 하기에 사람이 부족합니다.")
+          return
+      else:
+          # 러시안 룰렛에 당첨된 유저 선택
+          user = random.sample(users_list,1)
+          users_list.clear()
+          #await ctx.guild.kick(user[0])
+          await user[0].kick(reason="러시안 룰렛에 죽었습니다!")
+          await ctx.send(user + "님이 죽었습니다!")
+    else:
+        await ctx.send("참가한 사람들이 없습니다!")
 
 @bot.command()
 async def play(ctx,*,content):
@@ -246,7 +413,10 @@ async def play(ctx,*,content):
     temp = content.split(" ")
     text = ""
     for t in temp:
-        text += t
+        if len(temp) > 1:
+            text += t + " "
+        else :
+            text += t
     print(text)
 
     # message를 쓴적이 있다면 id 값으로 message 객체 생성
@@ -348,8 +518,6 @@ async def skip(ctx):
 # 봇 종료
 @bot.command()
 async def quit(ctx):
-    channel = ctx.message.author.voice.channel
-    server = ctx.guild
     voice_client = ctx.guild.voice_client
 
     if voice_client == None:  # 봇이 음성채널에 접속해있지 않았을 때
