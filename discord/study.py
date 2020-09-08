@@ -14,6 +14,7 @@ import urllib
 from urllib.request import Request, urlopen
 from urllib.parse import quote
 from bs4 import BeautifulSoup
+import pandas as pd
 
 # 디스코드 1.0 이상에서는 bot을 이용한 방식이 보편적이고 유용하다.(문법적으로도 좀 바뀜)
 
@@ -100,24 +101,59 @@ def queue(id,voice_client,options):  #음악 재생용 큐
     except Exception as e : # 에러 발생시
         print(e)
 
+# 레벨 데이터를 엑셀 파일로 저장
+def save_file(id,exp,level):
+    total_data = {}
+    total_data['id'] = id
+    total_data['exp'] = exp
+    total_data['level'] = level
+    total_data = pd.DataFrame(total_data)
+    #print(total_data)
+    total_data.to_excel("레벨.xlsx", index=False)
+
 # 봇이 구동되었을 때 보여지는 코드
 @bot.event
 async def on_ready():
     print(f"{bot.user}에 로그인하였습니다!")
 
-"""
+
 @bot.event
 async def on_message(message):      # 메세지가 채널에 올라왔을떄
-    message_content = message.content
-    #bad = message_content.find("씨발")    # 해당 단어가 있으면 0 이상을 반환
-    for word in bad_word:   # bad_word 개수가 늘어날수록 처리속도가 늘어나는지 확인 아직 안함
-        bad = message.content.find(word)
-        print(bad)
-        if bad >= 0:
-            await message.channel.send(f"욕하지마세요 {message.author} 걸레년아")   # 욕이 올라온 채널에 해당 메세지를 전송
-            await message.delete()  # 욕설이 담긴 메세지 삭제   단 봇이 메시지 관리를 할수 있는 권한을 줘야함
-    await bot.process_commands(message) # 메세지중 명령어가 있을 경우 처리해주는 코드
-"""
+    # 파일이 존재하지않으면 새로 생성
+    if os.path.isfile("C:\\Users\\user\\Desktop\\MinHo\\GitHub\\study\\discord\\레벨.xlsx") == False:
+        Data = { 'id' : [] ,'exp' : [],'level' : []}
+        Data = pd.DataFrame(Data)
+        Data.to_excel("레벨.xlsx")
+
+    # 파일 읽어오기
+    file = pd.read_excel("C:\\Users\\user\\Desktop\\MinHo\\GitHub\\study\\discord\\레벨.xlsx")
+    id_list = file['id'].tolist()
+    id_list = list(map(str, id_list))   # 저장할때 문자열로 해도 읽어올때 int 형으로 읽어와서 원소들을 문자열로 바꿔줘야함
+    exp_list = file['exp'].tolist()
+    level_list = file['level'].tolist()
+    exp = [100,500,1000,2000,5000,8000,10000,15000,20000,30000] # 다음 레벨업까지 필요한 경험치
+    i= 0
+
+    # id_list 에 본인 id가 없으면 새로 생성함
+    if (str(message.author.id) in id_list) == False:
+        id_list.append(str(message.author.id))
+        exp_list.append(0)
+        level_list.append(1)
+        save_file(id_list, exp_list, level_list)
+
+
+    # 메세지 칠때마다 경험치 5씩 증가 및 레벨업 경험치가 되면 레벨업
+    for id in id_list:
+        if str(id) == str(message.author.id):
+            exp_list[i] += 5
+            if exp_list[i] >= exp[level_list[i] - 1]:
+                level_list[i] += 1
+                await message.channel.send(f"**{message.author.nick}** 의 레벨이 올랐습니다.\n현재 레벨 : **" + str(level_list[i]) + "**\n경험치 : **" + str(exp_list[i]) + "**")
+            save_file(id_list,exp_list,level_list)
+            break
+        i += 1
+
+    await bot.process_commands(message)
 
 @bot.event
 async def on_member_join(member):
@@ -341,6 +377,10 @@ async def 날씨(ctx):
     weather_list = bs.findAll('p',{'class' : 'cast_txt'})
     #print(weather_list)
     hour_rain = bs.find('span',{'class' : 'rainfall'})
+    if hour_rain == None:
+        hour_rain = str(0)
+    else :
+        hour_rain = hour_rain.text
     #print(hour_rain.text)
 
     #시간대별 날씨
@@ -376,24 +416,26 @@ async def 날씨(ctx):
 
     # 메세지 레이아웃 설정 및 보내기
     embed = discord.Embed(title="날씨", description="", color=0x5CD1E5)
-    embed.add_field(name="현재 날씨", value=temperature_list[0].text + "℃ \n" + weather_list[0].text + "\n" + hour_rain.text, inline=False)
+    embed.add_field(name="현재 날씨", value=temperature_list[0].text + "℃ \n" + weather_list[0].text + "\n" + hour_rain, inline=False)
     embed.add_field(name="시간대별 날씨", value=hour_info,inline=False)
     await ctx.send(embed=embed)
 
 @bot.command()
 async def 러시안룰렛(ctx):
     if users_list != []:
-
       if len(users_list) < 2:
           await ctx.send("러시안 룰렛을 하기에 사람이 부족합니다.")
           return
       else:
+          channel = bot.get_channel(331697588632027148) # sleep 채널
+          text_channel = bot.get_channel(297698515415728128) # 채팅 채널
           # 러시안 룰렛에 당첨된 유저 선택
           user = random.sample(users_list,1)
           users_list.clear()
           #await ctx.guild.kick(user[0])
-          await user[0].kick(reason="러시안 룰렛에 죽었습니다!")
-          await ctx.send(user + "님이 죽었습니다!")
+          #await user[0].kick(reason="러시안 룰렛에 죽었습니다!")
+          await user[0].move_to(channel)
+          await text_channel.send(str(user[0]) + "님이 죽었습니다!")
     else:
         await ctx.send("참가한 사람들이 없습니다!")
 
@@ -509,8 +551,6 @@ async def play(ctx,*,content):
 # 스킵
 @bot.command()
 async def skip(ctx):
-    channel = ctx.message.author.voice.channel
-    server = ctx.guild
     voice_client = ctx.guild.voice_client
     
     if voice_client.is_playing():
