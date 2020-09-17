@@ -109,6 +109,9 @@ class NaverImageCrawler(QWidget):
         self.startCrawlingBtn = QPushButton("크롤링 시작")
         self.startCrawlingBtn.clicked.connect(self.getImages)  # 클릭시 getTop20keyword 함수와 연동
 
+        self.pbar = QProgressBar(self)
+        self.pbar.setGeometry(30,20,200,25)
+
         # 데이터를 뿌려줄 ListView
         self.imageListView = ImageListView()
 
@@ -117,6 +120,7 @@ class NaverImageCrawler(QWidget):
         grid.addWidget(self.search_word,1,0)
         grid.addWidget(self.startCrawlingBtn, 2, 0)
         grid.addWidget(self.imageListView, 3, 0)
+        grid.addWidget(self.pbar,4,0)
 
         self.setWindowTitle("네이버 이미지 크롤러")
         self.setFixedWidth(580)
@@ -137,7 +141,9 @@ class NaverImageCrawler(QWidget):
             n = 1
             print(elements)
             for element in elements:
+                self.pbar.setValue(n * 11.1)
                 if n > 9:
+                    self.pbar.setValue(100)
                     break
                 imageUrl = element['src']
                 #images.append(imageUrl)
@@ -161,7 +167,7 @@ class ImageListView(QWidget):
         self.setFixedHeight(650)
         self.tableWidget = QTableWidget(self)
         # 대강 꽉차게 사이즈 맞춤
-        self.tableWidget.resize(580,600)
+        self.tableWidget.resize(580,450)
         # 테이블 행 열 개수 설정
         self.tableWidget.setRowCount(3)
         self.tableWidget.setColumnCount(3)
